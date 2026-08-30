@@ -2,7 +2,7 @@
 
 Usage:
     python scripts/plot_flight.py --prediction data/sample_prediction.json
-    python scripts/plot_flight.py --prediction data/sample_prediction.json --output flight.png
+    python scripts/plot_flight.py --prediction data/sample_prediction.json --output flight_maps/png/flight.png
 """
 
 from __future__ import annotations
@@ -80,6 +80,7 @@ def plot_prediction(prediction: tawhiri.Prediction, title: str, output: Path | N
     fig.tight_layout()
 
     if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
         fig.savefig(output, dpi=150)
         print(f"Saved plot to {output}")
     else:

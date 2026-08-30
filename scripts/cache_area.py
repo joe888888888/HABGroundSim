@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("area_map.html"),
+        default=Path("area_maps/area_map.html"),
         help="Where to save the preview map HTML (default: %(default)s)",
     )
     return parser.parse_args()
@@ -86,6 +86,7 @@ def main() -> None:
         max_lon=args.lon + margin,
         max_bounds=True,
     )
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     folium.Marker([args.lat, args.lon], tooltip="Point").add_to(m)
     m.save(args.output)
     print(f"Saved preview map to {args.output}")

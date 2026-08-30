@@ -92,7 +92,7 @@ def ensure_tiles_cached_for_bbox(
     makes no network calls at all.
     """
     if not config.api_key:
-        raise MissingApiKeyError("MAPTILER_API_KEY is not set. Add it to .env.")
+        raise MissingApiKeyError("MAPTILER_API_KEY is not set. Add it to env/.env.")
 
     style_dir = Path(config.cache_dir) / config.style
     style_dir.mkdir(parents=True, exist_ok=True)

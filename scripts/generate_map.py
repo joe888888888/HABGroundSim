@@ -13,7 +13,10 @@ any future one. Zooming in has no hard cap: past the deepest cached zoom
 level, Leaflet just upscales the closest real tile (blurrier, but free -
 no extra calls). Pass --live to skip caching and hit MapTiler directly
 instead (fully unrestricted pan/zoom, but every new tile is a live call and
-the key ends up visible in the saved HTML).
+the key ends up visible in the saved HTML). Cached maps save to
+flight_maps/html/ by default; --live maps save to flight_maps/html/live/
+instead, since they embed the API key and shouldn't be mixed up with the
+safe-to-share cached ones.
 
 Usage:
     python scripts/generate_map.py --prediction data/sample_prediction.json
@@ -50,15 +53,25 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         type=Path,
-        default=Path("flight_map.html"),
-        help="Where to save the map HTML (default: %(default)s)",
+        default=None,
+        help=(
+            "Where to save the map HTML (default: flight_maps/html/flight_map.html, "
+            "or flight_maps/html/live/flight_map.html with --live)"
+        ),
     )
     parser.add_argument(
         "--live",
         action="store_true",
         help="Skip the local tile cache and hit MapTiler directly (overrides config.json's use_local_cache)",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.output is None:
+        args.output = (
+            Path("flight_maps/html/live/flight_map.html")
+            if args.live
+            else Path("flight_maps/html/flight_map.html")
+        )
+    return args
 
 
 def main() -> None:
@@ -79,6 +92,7 @@ def main() -> None:
             f"({cache_report.total} total, zoom levels {cache_report.zoom_levels})"
         )
 
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     m = maptiler.build_map(prediction, config.maptiler, cache_report=cache_report)
     m.save(args.output)
     print(f"Saved map to {args.output}")

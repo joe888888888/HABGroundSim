@@ -1,4 +1,4 @@
-# Loads config.json (non-secret, tunable parameters) and .env (API keys).
+# Loads config.json (non-secret, tunable parameters) and env/.env (API keys).
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+DEFAULT_ENV_PATH = Path(__file__).resolve().parent.parent / "env" / ".env"
 
 
 @dataclass
@@ -63,7 +64,7 @@ class MapTilerConfig:
         """
         if not self.api_key:
             raise MissingApiKeyError(
-                "MAPTILER_API_KEY is not set. Add it to .env."
+                "MAPTILER_API_KEY is not set. Add it to env/.env."
             )
         return f"https://api.maptiler.com/maps/{self.style}/{{z}}/{{x}}/{{y}}.{self.tile_format}?key={self.api_key}"
 
@@ -79,7 +80,7 @@ class AppConfig:
 
     @classmethod
     def load(cls, config_path: Path | str = DEFAULT_CONFIG_PATH, env_path: Optional[Path | str] = None) -> "AppConfig":
-        load_dotenv(dotenv_path=env_path)  # no-op if .env doesn't exist
+        load_dotenv(dotenv_path=env_path or DEFAULT_ENV_PATH)  # no-op if .env doesn't exist
 
         config_path = Path(config_path)
         with config_path.open("r", encoding="utf-8") as f:

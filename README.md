@@ -7,8 +7,8 @@ scrollable/zoomable MapTiler basemap.
 ## Quick start
 
 ```bash
-pip install -r requirements.txt
-cp .env.example .env        # then fill in your API keys
+pip install -r env/requirements.txt
+cp env/.env.example env/.env        # then fill in your API keys
 ```
 
 Edit `config.json` with your launch parameters (see below).
@@ -25,10 +25,13 @@ cost - see "Tile caching" below); every run after that for an overlapping
 area costs nothing:
 
 ```bash
-python scripts/generate_map.py --prediction data/sample_prediction.json --output flight_map.html
+python scripts/generate_map.py --prediction data/sample_prediction.json
 ```
 
-Open `flight_map.html` in a browser.
+Saves to `flight_maps/html/flight_map.html` by default (open it in a browser).
+`--live` maps save to `flight_maps/html/live/` instead, since they embed
+your MapTiler key and shouldn't be mixed up with the safe-to-share cached
+ones.
 
 You'll see a warning printed if the prediction file's own `request` block
 doesn't match `config.json` (e.g. you changed the launch site in
@@ -47,8 +50,8 @@ python scripts/cache_area.py --lat 37.953233 --lon -87.672916
 Two separate places hold configuration, deliberately split by sensitivity:
 
 - **`config.json`** - tunable, non-secret parameters. Safe to commit.
-- **`.env`** - API keys. Gitignored, never committed. Copy `.env.example` to
-  `.env` and fill in real values.
+- **`env/.env`** - API keys. Gitignored, never committed. Copy
+  `env/.env.example` to `env/.env` and fill in real values.
 
 ### `config.json`
 
@@ -85,11 +88,11 @@ Two separate places hold configuration, deliberately split by sensitivity:
 }
 ```
 
-`AppConfig.load()` (in `habgroundsim/config.py`) reads this file plus `.env`
+`AppConfig.load()` (in `habgroundsim/config.py`) reads this file plus `env/.env`
 and hands back typed dataclasses (`TawhiriRequestConfig`, `MapTilerConfig`) —
 nothing downstream touches raw dicts.
 
-### `.env`
+### `env/.env`
 
 ```
 MAPTILER_API_KEY=
@@ -101,7 +104,7 @@ Tawhiri's API is public and doesn't need a key.
 
 ```
 habgroundsim/
-    config.py         AppConfig.load() - reads config.json + .env
+    config.py         AppConfig.load() - reads config.json + env/.env
     tawhiri.py         fetch_prediction() hits the live Tawhiri API and saves
                         the response to data/; parse_prediction() turns
                         either that or a saved file into
@@ -123,6 +126,22 @@ scripts/
 data/
     sample_prediction.json   an already-fetched Tawhiri response, used as
                               test/example input
+
+area_maps/              marker-only preview maps from cache_area.py.
+                         Gitignored - regenerable, not source.
+
+flight_maps/
+    html/                scrollable/zoomable flight maps from generate_map.py
+        live/             maps generated with --live - these embed your
+                           MapTiler key, keep them separate from the
+                           cached (key-free) ones above
+    png/                 static top-down plots from plot_flight.py
+    Gitignored - regenerable, not source.
+
+env/
+    .env                 API keys. Gitignored, never committed.
+    .env.example          template for .env. Safe to commit.
+    requirements.txt      Python dependencies.
 
 tile_cache/            downloaded MapTiler tiles, generated on first run.
                         Gitignored - regenerable, not source.
@@ -220,8 +239,7 @@ Trade-offs to know about:
   saved HTML's page source. Useful for one-off exploration; restrict the key
   to your expected domains/referrers in the MapTiler dashboard if you use it
   and might ever share the resulting HTML.
-- Never commit `tile_cache/` or a generated `*.html` map file to version
-  control — `.gitignore` already excludes `tile_cache/` and `.env`; add
-  generated map/plot output paths too if you start saving them with
-  predictable names.
+- Never commit `tile_cache/` or a generated map file to version control —
+  `.gitignore` already excludes `tile_cache/`, `env/.env`, `area_maps/`,
+  and `flight_maps/` (`--live` maps included, via `flight_maps/html/live/`).
 

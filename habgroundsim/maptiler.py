@@ -74,7 +74,7 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
         zoom_start = cache_max_zoom
     else:
         tiles = config.tile_url_template()
-        map_kwargs = {}
+        map_kwargs = {"attr": config.attribution}
         zoom_start = config.default_zoom
 
     m = folium.Map(
