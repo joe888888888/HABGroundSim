@@ -81,6 +81,8 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
         location=[center_lat, center_lon],
         zoom_start=zoom_start,
         tiles=tiles,
+        zoom_snap=0.25,  # fractional zoom: smooth scroll/pinch instead of jumping whole levels
+        zoom_delta=0.5,
         **map_kwargs,
     )
 
@@ -109,19 +111,48 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
         icon=folium.Icon(color="black", icon="stop"),
     ).add_to(m)
 
-    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
-
-    if cache_report is not None:
-        # Runs after the page (and fitBounds) has fully loaded, so
-        # getZoom() reflects whatever zoom actually filled window.
-        # Clamped to cache_min_zoom so it can never ask for tiles that were
-        # never fetched, no matter how large the window is.
-        script = f"""
-        window.addEventListener('load', function() {{
+    # fitBounds() is re-run (not just done once) because containers that
+    # report the wrong size at initial script execution - a VS Code preview
+    # pane, a split view, any layout that finishes sizing after the page
+    # fires its scripts - leave Leaflet's internal size stale forever unless
+    # told otherwise (invalidateSize()); that stale size is what shows up as
+    # large blank margins around the map. Re-fitting on 'load' and on every
+    # resize keeps the flight framed correctly regardless of what size the
+    # container happened to be when the script first ran.
+    min_zoom_lock = (
+        f"leafletMap.setMinZoom(Math.max(leafletMap.getZoom(), {cache_min_zoom}));"
+        if cache_report is not None
+        else ""
+    )
+    reset_min_zoom = (
+        f"leafletMap.setMinZoom({cache_min_zoom});"
+        if cache_report is not None
+        else ""
+    )
+    script = f"""
+    (function() {{
+        var bounds = [[{min_lat}, {min_lon}], [{max_lat}, {max_lon}]];
+        function refit() {{
             var leafletMap = {m.get_name()};
-            leafletMap.setMinZoom(Math.max(leafletMap.getZoom(), {cache_min_zoom}));
+            {reset_min_zoom}
+            leafletMap.invalidateSize();
+            leafletMap.fitBounds(bounds);
+            {min_zoom_lock}
+        }}
+        // Looking up the map by its variable name has to happen inside
+        // refit(), not once up here: this whole block runs (in page source
+        // order) before folium's own script declares that variable further
+        // down, so a lookup at this point would permanently capture
+        // "undefined" instead of the real Leaflet map object.
+        document.addEventListener('DOMContentLoaded', refit);
+        window.addEventListener('load', refit);
+        var resizeTimer;
+        window.addEventListener('resize', function() {{
+            clearTimeout(resizeTimer);
+            resizeTimer = setTimeout(refit, 150);
         }});
-        """
-        m.get_root().script.add_child(folium.Element(script))
+    }})();
+    """
+    m.get_root().script.add_child(folium.Element(script))
 
     return m
