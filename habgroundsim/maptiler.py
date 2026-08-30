@@ -1,0 +1,127 @@
+"""
+Builds a scrollable/zoomable folium (Leaflet) map with a MapTiler basemap
+and a parsed Tawhiri prediction overlaid on top.
+
+The map view frames the whole flight (launch to landing), padded by
+config.json's maptiler.bounds_margin_deg.
+
+Two tile sources, chosen by whether a CacheReport is passed in:
+
+- Cached (default): tiles were pre-fetched to disk by tile_cache.py for the
+  flight's bounding box, at a fixed set of zoom levels
+  (config.json: maptiler.zoom_levels).
+    - Zoom IN has a small soft buffer past the real cache: the tile layer's
+      max_native_zoom is set to the deepest zoom actually cached, and
+      max_zoom is that plus CACHE_ZOOM_IN_BUFFER (currently 1) - a little
+      upscaled/blurry zoom past the real tiles, then a hard stop. No extra
+      tiles or calls are needed for that one buffer level.
+    - Zoom OUT is capped, but not at a fixed number: after the map's
+      initial fitBounds() call places the flight in view, a small injected
+      script locks minZoom to whatever zoom that landed on for the
+      viewer's actual window size (never lower than the shallowest cached
+      zoom, so it can't ask for tiles that were never fetched). That's the
+      only way to get "fills the screen at the most zoomed-out point" to
+      hold across different window sizes - it has to be computed in the
+      browser, not baked in statically.
+  Pan is hard-restricted to the flight's bounding box (max_bounds). The
+  MapTiler key never ends up in the saved HTML in this mode.
+- Live: tiles come straight from MapTiler on every pan/zoom, no
+  restrictions at all. The view starts framed on the flight, but nothing
+  stops going further from there. Whatever key is used ends up visible in
+  the saved HTML's page source. 
+"""
+
+from __future__ import annotations
+
+from typing import Optional
+
+import folium
+
+from . import tawhiri, tile_cache
+from .config import MapTilerConfig
+
+STAGE_COLORS = {"ascent": "blue", "descent": "orange"}
+LIVE_MAX_ZOOM = 19  # generous ceiling for --live mode; MapTiler serves real tiles up to its own native max
+CACHE_ZOOM_IN_BUFFER = 1  # cached mode: allow this much soft/blurry zoom past max_native_zoom, no more
+
+
+def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_report: Optional[tile_cache.CacheReport] = None,) -> folium.Map:
+    launch = prediction.launch_point
+    burst = prediction.burst_point
+    landing = prediction.landing_point
+
+    min_lat, min_lon, max_lat, max_lon = tile_cache.bounding_box(prediction.all_points, config.bounds_margin_deg)
+    center_lat = (min_lat + max_lat) / 2
+    center_lon = (min_lon + max_lon) / 2
+
+    if cache_report is not None:
+        tile_url = tile_cache.local_tile_url_template(cache_report.style_dir, config.tile_format)
+        cache_min_zoom, cache_max_zoom = min(cache_report.zoom_levels), max(cache_report.zoom_levels)
+        tiles = folium.TileLayer(
+            tiles=tile_url,
+            attr=config.attribution,
+            min_zoom=cache_min_zoom,
+            max_zoom=cache_max_zoom + CACHE_ZOOM_IN_BUFFER,  # a little soft zoom past the cache, then a hard stop
+            max_native_zoom=cache_max_zoom,  # only this deep is a real tile; the buffer zoom above is upscaled
+        )
+        map_kwargs = dict(
+            min_lat=min_lat,
+            max_lat=max_lat,
+            min_lon=min_lon,
+            max_lon=max_lon,
+            max_bounds=True,
+        )
+        zoom_start = cache_max_zoom
+    else:
+        tiles = config.tile_url_template()
+        map_kwargs = {}
+        zoom_start = config.default_zoom
+
+    m = folium.Map(
+        location=[center_lat, center_lon],
+        zoom_start=zoom_start,
+        tiles=tiles,
+        **map_kwargs,
+    )
+
+    for stage in prediction.stages:
+        points = [[p.latitude, p.longitude] for p in stage.points]
+        folium.PolyLine(
+            points,
+            color=STAGE_COLORS.get(stage.name, "gray"),
+            weight=3,
+            tooltip=stage.name.capitalize(),
+        ).add_to(m)
+
+    folium.Marker(
+        [launch.latitude, launch.longitude],
+        tooltip="Launch",
+        icon=folium.Icon(color="green", icon="play"),
+    ).add_to(m)
+    folium.Marker(
+        [burst.latitude, burst.longitude],
+        tooltip=f"Burst ({burst.altitude:.0f} m)",
+        icon=folium.Icon(color="red", icon="star"),
+    ).add_to(m)
+    folium.Marker(
+        [landing.latitude, landing.longitude],
+        tooltip="Landing",
+        icon=folium.Icon(color="black", icon="stop"),
+    ).add_to(m)
+
+    m.fit_bounds([[min_lat, min_lon], [max_lat, max_lon]])
+
+    if cache_report is not None:
+        # Runs after the page (and fitBounds) has fully loaded, so
+        # getZoom() reflects whatever zoom actually filled window.
+        # Clamped to cache_min_zoom so it can never ask for tiles that were
+        # never fetched, no matter how large the window is.
+        script = f"""
+        window.addEventListener('load', function() {{
+            var leafletMap = {m.get_name()};
+            leafletMap.setMinZoom(Math.max(leafletMap.getZoom(), {cache_min_zoom}));
+        }});
+        """
+        m.get_root().script.add_child(folium.Element(script))
+
+    return m

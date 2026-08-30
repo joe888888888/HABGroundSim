@@ -1,0 +1,13 @@
+.env
+tile_cache/
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.DS_Store
+
+# Generated plot/map output (regenerable from data/*.json, not source)
+flight*.png
+flight_map*.html
+area_map*.html

@@ -1,0 +1,27 @@
+{
+  "tawhiri": {
+    "request": {
+      "launch_latitude": 35.1985,
+      "launch_longitude": 253.4069,
+      "launch_altitude": 1519,
+      "launch_datetime": "2026-09-05T18:00:00Z",
+      "ascent_rate": 5,
+      "burst_altitude": 30000,
+      "descent_rate": 10,
+      "profile": "standard_profile",
+      "dataset": "2026-08-30T06:00:00Z",
+      "format": "json",
+      "version": 1
+    }
+  },
+  "maptiler": {
+    "style": "hybrid",
+    "tile_format": "jpg",
+    "default_zoom": 11,
+    "attribution": "© MapTiler © OpenStreetMap contributors",
+    "use_local_cache": true,
+    "cache_dir": "tile_cache",
+    "zoom_levels": [7, 8, 9, 10, 11, 12],
+    "bounds_margin_deg": 0.15
+  }
+}
