@@ -70,6 +70,7 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
             min_lon=min_lon,
             max_lon=max_lon,
             max_bounds=True,
+            max_bounds_viscosity=1.0,  # rigid bounds - no elastic overscroll past the cached area (which would show as blank whitespace, since no tiles exist beyond it)
         )
         zoom_start = cache_max_zoom
     else:
@@ -120,7 +121,7 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
     # resize keeps the flight framed correctly regardless of what size the
     # container happened to be when the script first ran.
     min_zoom_lock = (
-        f"leafletMap.setMinZoom(Math.max(leafletMap.getZoom(), {cache_min_zoom}));"
+        f"leafletMap.setMinZoom(Math.max(containZoom, {cache_min_zoom}));"
         if cache_report is not None
         else ""
     )
@@ -136,7 +137,18 @@ def build_map(prediction: tawhiri.Prediction, config: MapTilerConfig, cache_repo
             var leafletMap = {m.get_name()};
             {reset_min_zoom}
             leafletMap.invalidateSize();
-            leafletMap.fitBounds(bounds);
+            var llBounds = L.latLngBounds(bounds);
+            // containZoom ("contain" fitting, same as fitBounds()) is the
+            // smaller of the two axis-constrained zoom levels, so the whole
+            // flight fits in view - this is the most-zoomed-out level that
+            // still shows everything. Default/resize framing starts here
+            // (whichever axis isn't the tight constraint shows blank margin,
+            // which is expected: the flight's bounding box aspect ratio
+            // doesn't match every window's). minZoom is capped at the same
+            // level, so this is as far out as the map goes - zooming in from
+            // here is unrestricted up to the deepest cached zoom.
+            var containZoom = leafletMap.getBoundsZoom(llBounds, false);
+            leafletMap.setView(llBounds.getCenter(), containZoom);
             {min_zoom_lock}
         }}
         // Looking up the map by its variable name has to happen inside

@@ -20,6 +20,7 @@ from . import tawhiri
 from .config import MapTilerConfig, MissingApiKeyError
 
 REQUEST_DELAY_SECONDS = 0.05  # be polite - don't hammer the tile server in a tight loop
+TILE_BUFFER = 2  # extra rows/cols fetched beyond the exact bbox on every side, matching Leaflet's default keepBuffer - without this, panning/zooming near the edge of the cached area requests tiles that were never fetched (confirmed via DevTools: Leaflet requesting x=1046,1047,1054,1055 when only 1048-1053 was cached), which show as blank/missing map background
 
 
 def deg_to_tile(lat_deg: float, lon_deg: float, zoom: int) -> Tuple[int, int]:
@@ -45,9 +46,16 @@ def bounding_box(points: List[tawhiri.TrajectoryPoint], margin_deg: float) -> Tu
     )
 
 
-def tiles_for_bbox(min_lat: float, min_lon: float, max_lat: float, max_lon: float, zoom: int) -> List[Tuple[int, int]]:
+def tiles_for_bbox(
+    min_lat: float, min_lon: float, max_lat: float, max_lon: float, zoom: int, buffer: int = TILE_BUFFER
+) -> List[Tuple[int, int]]:
     x_min, y_min = deg_to_tile(max_lat, min_lon, zoom)  # top-left (north-west)
     x_max, y_max = deg_to_tile(min_lat, max_lon, zoom)  # bottom-right (south-east)
+    n = int(2**zoom)
+    x_min = max(x_min - buffer, 0)
+    x_max = min(x_max + buffer, n - 1)
+    y_min = max(y_min - buffer, 0)
+    y_max = min(y_max + buffer, n - 1)
     return [(x, y) for x in range(x_min, x_max + 1) for y in range(y_min, y_max + 1)]
 
 
